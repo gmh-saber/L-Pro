@@ -75,7 +75,7 @@ export default function OrdersIndex({
   fromDate: fromDateProp = '',
   toDate: toDateProp = '',
   q, 
-  bdcourierConfigured = false 
+  fraudGuardConfigured = false 
 }) {
   const { auth } = usePage().props;
   const user = auth?.user;
@@ -426,16 +426,16 @@ export default function OrdersIndex({
                         </div>
                       </div>
 
-                      {bdcourierConfigured && (
+                      {fraudGuardConfigured && (
                         <button
                           onClick={() => openCourierModal(order.customer_phone, order.customer_name)}
                           className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold transition-colors border border-indigo-100 shrink-0 cursor-pointer"
-                          title="Check Courier Delivery History & Fraud Score"
+                          title="Check Fraud Guard Delivery History & Score"
                         >
                           <svg className="w-3 h-3 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                           </svg>
-                          Courier Ratio
+                          Fraud Check
                         </button>
                       )}
                     </div>
@@ -576,18 +576,18 @@ export default function OrdersIndex({
                         <p className="font-bold text-gray-900 text-xs sm:text-sm">{order.customer_name}</p>
                         <p className="text-gray-500 text-xs font-mono">{order.customer_phone}</p>
                         
-                        {/* Courier / Fraud Ratio Badge & Checker if BD Courier is Configured */}
-                        {bdcourierConfigured && (
+                        {/* Courier / Fraud Ratio Badge & Checker if Fraud Guard is Configured */}
+                        {fraudGuardConfigured && (
                           <div className="mt-1 flex items-center gap-1.5 flex-wrap">
                             <button
                               onClick={() => openCourierModal(order.customer_phone, order.customer_name)}
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10.5px] font-semibold transition-colors border border-indigo-100 cursor-pointer"
-                              title="Check Courier Delivery History & Fraud Score"
+                              title="Check Fraud Guard Delivery History & Score"
                             >
                               <svg className="w-3 h-3 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                               </svg>
-                              Courier Ratio
+                              Fraud Check
                             </button>
                           </div>
                         )}
@@ -728,7 +728,7 @@ export default function OrdersIndex({
                     </svg>
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900 text-sm">BD Courier Ratio &amp; Delivery Intelligence</h3>
+                    <h3 className="font-bold text-gray-900 text-sm">Fraud Provider Delivery Intelligence</h3>
                     <p className="text-xs text-gray-500">Phone: <strong className="text-gray-900 font-mono">{courierModal.phone}</strong> {courierModal.customerName && `(${courierModal.customerName})`}</p>
                   </div>
                 </div>
@@ -741,116 +741,59 @@ export default function OrdersIndex({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
                   </svg>
-                  <span className="text-xs font-semibold text-gray-600">Querying BD Courier databases (Steadfast, Pathao, RedX, Paperfly)...</span>
+                  <span className="text-xs font-semibold text-gray-600">Querying fraud guard provider...</span>
                 </div>
               ) : courierModal.error ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs text-amber-800 space-y-2">
                   <p className="font-bold">Notice:</p>
                   <p>{courierModal.error}</p>
-                  {!bdcourierConfigured && (
-                    <p className="text-gray-600">You can configure your BD Courier API Key under <strong>Settings → Fraud Guard</strong> to enable full network-wide courier history checks.</p>
+                  {!fraudGuardConfigured && (
+                    <p className="text-gray-600">You can configure your Fraud Guard API under <strong>Settings → Fake Order Guard</strong> to enable full delivery history checks.</p>
                   )}
                 </div>
               ) : courierModal.data ? (() => {
-                const dataMap = courierModal.data.data || {};
-                const summary = dataMap.summary || {};
-                const courierKeys = ['steadfast', 'pathao', 'redx', 'paperfly', 'parceldex', 'courrierfast', 'carrybee'];
-                const couriers = courierKeys.map(k => dataMap[k]).filter(c => c && typeof c === 'object');
-                
-                const total = summary.total_parcel ?? 0;
-                const success = summary.success_parcel ?? 0;
-                const cancelled = summary.cancelled_parcel ?? 0;
-                const ratio = courierModal.data._success_ratio ?? (total > 0 ? (success / total) * 100 : 0);
-                const level = courierModal.data.risk_verdict?.level || courierModal.data._risk_level || 'safe';
-                const label = courierModal.data.risk_verdict?.label || courierModal.data._risk_label || 'Safe';
-                const action = courierModal.data.risk_verdict?.action || '';
-                const reasons = courierModal.data.risk_verdict?.reasons || [];
-                const reports = courierModal.data.reports || [];
+                const fraudData = courierModal.data;
+                const level   = fraudData.risk_level || 'unknown';
+                const label   = fraudData.risk_label || 'Unknown';
+                const reports = fraudData.reports || [];
+                const metrics = fraudData.metrics || [];
+                const providerLabel = fraudData.provider === 'bdcourier' ? 'BD Courier' : 'Steadfast';
 
                 return (
                   <div className="space-y-4">
                     {/* Score Hero Banner */}
                     <div className="bg-gradient-to-r from-slate-900 to-indigo-950 rounded-xl p-4 text-white flex items-center justify-between shadow-sm">
                       <div>
-                        <p className="text-xs text-slate-300 font-semibold mb-1">Courier Risk Score</p>
+                        <p className="text-xs text-slate-300 font-semibold mb-1">{providerLabel} Risk Score</p>
                         <RiskBadge level={level} label={label} />
-                        {action && <p className="text-[11px] text-slate-300 mt-1 font-medium">{action}</p>}
                       </div>
                       <div className="text-right">
-                        <div className={`text-3xl font-black ${ratio < 50 ? 'text-rose-400' : ratio < 75 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                          {Number(ratio).toFixed(0)}%
+                        <div className={`text-3xl font-black ${metrics[0] ? metrics[0].color : 'text-emerald-400'}`}>
+                          {metrics[0] ? metrics[0].value : 'N/A'}
                         </div>
-                        <p className="text-[10px] text-slate-300 font-medium">Overall Delivery Ratio</p>
+                        <p className="text-[10px] text-slate-300 font-medium">Success Ratio</p>
                       </div>
                     </div>
 
                     {/* Stats Grid */}
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
-                        <p className="text-lg font-black text-gray-800">{total}</p>
-                        <p className="text-[11px] text-gray-400 font-medium mt-0.5">Total Parcels</p>
-                      </div>
-                      <div className="bg-emerald-50 rounded-xl p-3 text-center border border-emerald-100">
-                        <p className="text-lg font-black text-emerald-600">{success}</p>
-                        <p className="text-[11px] text-emerald-700 font-medium mt-0.5">Delivered</p>
-                      </div>
-                      <div className="bg-rose-50 rounded-xl p-3 text-center border border-rose-100">
-                        <p className="text-lg font-black text-rose-600">{cancelled}</p>
-                        <p className="text-[11px] text-rose-700 font-medium mt-0.5">Cancelled / Returned</p>
-                      </div>
+                      {metrics.slice(1).map((s, idx) => (
+                        <div key={idx} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+                          <p className={`text-lg font-black ${s.color}`}>{s.value}</p>
+                          <p className="text-[11px] text-gray-400 font-medium mt-0.5">{s.label}</p>
+                        </div>
+                      ))}
                     </div>
 
-                    {/* Breakdown by Couriers in BD */}
-                    {couriers.length > 0 && (
-                      <div className="space-y-2">
-                        <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Breakdown by Courier Services</p>
-                        <div className="border border-gray-100 rounded-xl overflow-hidden">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-100">
-                                <th className="px-3 py-2 text-left">Courier</th>
-                                <th className="px-3 py-2 text-center">Total</th>
-                                <th className="px-3 py-2 text-center">Delivered</th>
-                                <th className="px-3 py-2 text-center">Returned</th>
-                                <th className="px-3 py-2 text-right">Success %</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                              {couriers.map((c, i) => {
-                                const cTot = c.total_parcel || 0;
-                                const cDel = c.success_parcel || 0;
-                                const cRet = c.cancelled_parcel || 0;
-                                const cRatio = c.success_ratio ?? (cTot > 0 ? Math.round((cDel / cTot) * 100) : 0);
-                                return (
-                                  <tr key={i} className="hover:bg-gray-50/50">
-                                    <td className="px-3 py-2 font-bold text-gray-800 capitalize">{c.name || c.courier_name || 'Courier'}</td>
-                                    <td className="px-3 py-2 text-center text-gray-600">{cTot}</td>
-                                    <td className="px-3 py-2 text-center text-emerald-600 font-bold">{cDel}</td>
-                                    <td className="px-3 py-2 text-center text-rose-500 font-bold">{cRet}</td>
-                                    <td className="px-3 py-2 text-right font-bold text-gray-800">{cRatio}%</td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
-
                     {/* Reasons / Fraud Reports */}
-                    {(reports.length > 0 || reasons.length > 0) && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 space-y-1.5">
-                        <p className="font-bold flex items-center gap-1.5 text-amber-800">
+                    {reports.length > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-900 space-y-1.5">
+                        <p className="font-bold flex items-center gap-1.5 text-red-800">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                           Risk Notes &amp; Fraud Reports
                         </p>
-                        {reasons.map((rsn, idx) => (
-                          <p key={idx} className="text-xs text-amber-800 bg-white/60 p-1.5 rounded border border-amber-100">
-                            • {rsn}
-                          </p>
-                        ))}
                         {reports.map((r, i) => (
                           <div key={i} className="bg-white/80 rounded p-1.5 border border-red-100 text-red-700">
                             {r.details} <span className="text-red-500 font-medium">({r.courierName})</span>

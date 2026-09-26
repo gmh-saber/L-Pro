@@ -268,12 +268,18 @@ class SettingController extends Controller
                 'fog_phone_cooldown_minutes'       => ['nullable', 'integer', 'min:0', 'max:1440'],
                 'fog_max_orders_per_phone'         => ['nullable', 'integer', 'min:0', 'max:100'],
                 'fog_auto_block_ip_on_cancel'      => ['nullable', 'boolean'],
+                'fog_provider'                     => ['nullable', 'string', 'in:bdcourier,steadfast'],
                 // BD Courier
                 'fog_bdcourier_enabled'            => ['nullable', 'boolean'],
                 'fog_bdcourier_api_key'            => ['nullable', 'string', 'max:200'],
                 'fog_bdcourier_auto_check_checkout'=> ['nullable', 'boolean'],
                 'fog_bdcourier_min_success_rate'   => ['nullable', 'integer', 'min:0', 'max:100'],
                 'fog_bdcourier_block_risk_levels'  => ['nullable', 'string', 'max:100'],
+                // Steadfast
+                'fog_steadfast_enabled'            => ['nullable', 'boolean'],
+                'fog_steadfast_auto_check_checkout'=> ['nullable', 'boolean'],
+                'fog_steadfast_min_score'          => ['nullable', 'integer', 'min:0', 'max:100'],
+                'fog_steadfast_block_risk_levels'  => ['nullable', 'string', 'max:100'],
             ],
             default => throw ValidationException::withMessages(['section' => 'Unknown settings section.']),
         };
@@ -334,8 +340,10 @@ class SettingController extends Controller
                 'redx_api_token',
             ],
             'fake_order_guard' => [
+                'fog_provider',
                 'fog_ip_cooldown_minutes', 'fog_phone_cooldown_minutes', 'fog_max_orders_per_phone',
                 'fog_bdcourier_api_key', 'fog_bdcourier_min_success_rate', 'fog_bdcourier_block_risk_levels',
+                'fog_steadfast_min_score', 'fog_steadfast_block_risk_levels',
             ],
             default => [],
         };
@@ -416,6 +424,9 @@ Setting::put('show_cards_in_footer', $request->boolean('show_cards_in_footer') ?
             if ($request->filled('fog_bdcourier_api_key')) {
                 Setting::put('fog_bdcourier_api_key', (string) $request->input('fog_bdcourier_api_key'));
             }
+            // Steadfast
+            Setting::put('fog_steadfast_enabled',             $request->boolean('fog_steadfast_enabled') ? '1' : '0');
+            Setting::put('fog_steadfast_auto_check_checkout', $request->boolean('fog_steadfast_auto_check_checkout') ? '1' : '0');
         }
 
         if ($section === 'brand') {

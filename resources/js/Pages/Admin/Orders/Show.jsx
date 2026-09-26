@@ -168,19 +168,15 @@ function FraudHistoryPanel({ order }) {
 
           {!fraudResult && !fraudLoading && !fraudError && (
             <p className="text-xs text-gray-400 text-center py-6">
-              Click &ldquo;Check Fraud&rdquo; to query BD Courier's database for this phone number.
+              Click &ldquo;Check Fraud&rdquo; to query the database for this phone number.
             </p>
           )}
 
           {fraudResult && (() => {
-            const summary = fraudResult.data?.summary || {};
-            const total   = summary.total_parcel    || 0;
-            const success = summary.success_parcel  || 0;
-            const failed  = summary.cancelled_parcel|| 0;
-            const ratio   = fraudResult._success_ratio || 0;
-            const level   = fraudResult._risk_level;
-            const label   = fraudResult._risk_label;
+            const level   = fraudResult.risk_level;
+            const label   = fraudResult.risk_label;
             const reports = fraudResult.reports || [];
+            const metrics = fraudResult.metrics || [];
 
             const bannerCls =
               level === 'danger' ? 'bg-rose-50 border-rose-200' :
@@ -189,10 +185,8 @@ function FraudHistoryPanel({ order }) {
               level === 'low'    ? 'bg-blue-50 border-blue-200'  :
                                    'bg-green-50 border-green-200';
 
-            const ratioCls =
-              ratio < 50 ? 'text-red-600' :
-              ratio < 75 ? 'text-amber-600' :
-                           'text-green-600';
+            const ratioCls = metrics[0] ? metrics[0].color : 'text-gray-900';
+            const ratioValue = metrics[0] ? metrics[0].value : 'N/A';
 
             return (
               <div className="space-y-4">
@@ -203,19 +197,15 @@ function FraudHistoryPanel({ order }) {
                     <RiskBadge level={level} label={label} />
                   </div>
                   <div className="text-right">
-                    <p className={`text-3xl font-black ${ratioCls}`}>{ratio.toFixed(0)}%</p>
-                    <p className="text-xs text-gray-500">Success Rate</p>
+                    <p className={`text-3xl font-black ${ratioCls}`}>{ratioValue}</p>
+                    <p className="text-xs text-gray-500">Success Ratio</p>
                   </div>
                 </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Total', value: total, color: 'text-gray-800' },
-                    { label: 'Delivered', value: success, color: 'text-green-600' },
-                    { label: 'Cancelled', value: failed, color: 'text-red-500' },
-                  ].map(s => (
-                    <div key={s.label} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+                  {metrics.slice(1).map((s, idx) => (
+                    <div key={idx} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
                       <p className={`text-xl font-black ${s.color}`}>{s.value}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
                     </div>
@@ -485,7 +475,7 @@ function EditCustomerModal({ order, onClose }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    Main Order Show page
    ───────────────────────────────────────────────────────────────────────────── */
-export default function OrderShow({ order, bdcourier }) {
+export default function OrderShow({ order, fraudData }) {
   const [showCourierModal, setShowCourierModal] = useState(false);
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
 
@@ -714,8 +704,8 @@ export default function OrderShow({ order, bdcourier }) {
                 </dl>
               </div>
 
-              {/* BD Courier Fraud Info (SSR-loaded) */}
-              {bdcourier && (
+              {/* Fraud Info (SSR-loaded) */}
+              {fraudData && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                   <div className="p-5 border-b border-gray-100 flex items-center justify-between">
                     <h3 className="font-semibold text-gray-900 text-sm flex items-center gap-2">
@@ -723,44 +713,52 @@ export default function OrderShow({ order, bdcourier }) {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 1h8zm0 0h2a1 1 0 001-1v-3.586a1 1 0 00-.293-.707l-3-3A1 1 0 0014 8h-1v8z" />
                       </svg>
-                      BD Courier Report
+                      {fraudData.provider === 'bdcourier' ? 'BD Courier Report' : 'Steadfast Report'}
                     </h3>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      bdcourier._risk_level === 'danger' ? 'bg-rose-100 text-rose-700' :
-                      bdcourier._risk_level === 'high'   ? 'bg-red-100 text-red-700'   :
-                      bdcourier._risk_level === 'medium' ? 'bg-amber-100 text-amber-700':
-                      bdcourier._risk_level === 'low'    ? 'bg-blue-100 text-blue-700'  :
-                                                           'bg-green-100 text-green-700'
+                      fraudData.risk_level === 'danger' ? 'bg-rose-100 text-rose-700' :
+                      fraudData.risk_level === 'high'   ? 'bg-red-100 text-red-700'   :
+                      fraudData.risk_level === 'medium' ? 'bg-amber-100 text-amber-700':
+                      fraudData.risk_level === 'low'    ? 'bg-blue-100 text-blue-700'  :
+                                                          'bg-green-100 text-green-700'
                     }`}>
-                      {bdcourier._risk_label} Risk
+                      {fraudData.risk_label} Risk
                     </span>
                   </div>
                   <div className="p-5 space-y-4">
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-full border-4 border-gray-50 flex items-center justify-center flex-shrink-0">
-                        <span className={`font-bold text-sm ${bdcourier._success_ratio < 50 ? 'text-red-500' : 'text-green-600'}`}>
-                          {bdcourier._success_ratio.toFixed(0)}%
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-2xl font-black text-gray-900">{bdcourier.data?.summary?.total_parcel || 0}</p>
-                        <p className="text-xs text-gray-500">Total Parcels</p>
-                      </div>
+                      {fraudData.metrics && fraudData.metrics[0] && (
+                        <div className="w-14 h-14 rounded-full border-4 border-gray-50 flex items-center justify-center flex-shrink-0">
+                          <span className={`font-bold text-sm ${fraudData.metrics[0].color}`}>
+                            {fraudData.metrics[0].value}
+                          </span>
+                        </div>
+                      )}
+                      {fraudData.metrics && fraudData.metrics[1] && (
+                        <div>
+                          <p className={`text-2xl font-black ${fraudData.metrics[1].color}`}>{fraudData.metrics[1].value}</p>
+                          <p className="text-xs text-gray-500">{fraudData.metrics[1].label}</p>
+                        </div>
+                      )}
                       <div className="ml-auto text-right">
-                        <p className="text-sm font-semibold text-green-600">{bdcourier.data?.summary?.success_parcel || 0} ✓</p>
-                        <p className="text-sm font-semibold text-red-500">{bdcourier.data?.summary?.cancelled_parcel || 0} ✕</p>
+                        {fraudData.metrics && fraudData.metrics[2] && (
+                          <p className={`text-sm font-semibold ${fraudData.metrics[2].color}`}>{fraudData.metrics[2].value}</p>
+                        )}
+                        {fraudData.metrics && fraudData.metrics[3] && (
+                          <p className={`text-sm font-semibold ${fraudData.metrics[3].color}`}>{fraudData.metrics[3].value}</p>
+                        )}
                       </div>
                     </div>
-                    {bdcourier.reports && bdcourier.reports.length > 0 && (
+                    {fraudData.reports && fraudData.reports.length > 0 && (
                       <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                         <p className="text-xs font-semibold text-red-700 flex items-center gap-1 mb-1">
                           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                           </svg>
-                          {bdcourier.reports.length} Fraud Report(s)
+                          {fraudData.reports.length} Fraud Report(s)
                         </p>
                         <ul className="text-xs text-red-600 space-y-1 pl-4 list-disc">
-                          {bdcourier.reports.map((r, i) => <li key={i}>{r.details} ({r.courierName})</li>)}
+                          {fraudData.reports.map((r, i) => <li key={i}>{r.details} ({r.courierName})</li>)}
                         </ul>
                       </div>
                     )}

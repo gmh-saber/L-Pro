@@ -13,10 +13,25 @@ use Illuminate\Support\Str;
 
 class CategoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $query = Category::with('parent')->withCount('products')->orderBy('position');
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'ilike', "%{$search}%")
+                  ->orWhere('slug', 'ilike', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('parent_id')) {
+            $query->where('parent_id', $request->input('parent_id'));
+        }
+
         return Inertia::render('Admin/Categories/Index', [
-            'categories' => Category::with('parent')->withCount('products')->orderBy('position')->get(),
+            'categories' => $query->paginate(50)->withQueryString(),
+            'filters' => $request->only(['search', 'parent_id']),
+            'parents' => Category::whereNull('parent_id')->orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -179,5 +194,17 @@ class CategoryController extends Controller
         }
 
         return $slug;
+    }
+
+    public function toggle(Category $category)
+    {
+        $category->update(['is_active' => ! $category->is_active]);
+
+        return back()->with(
+            'status',
+            $category->is_active
+                ? 'Category activated successfully.'
+                : 'Category deactivated successfully.'
+        );
     }
 }

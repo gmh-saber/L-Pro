@@ -153,12 +153,20 @@ class LandingPageController extends Controller
                 }
             }
 
-            // BD Courier Automated Courier Fraud History Check
-            if ((string) setting('fog_bdcourier_enabled', '0') === '1' && (string) setting('fog_bdcourier_auto_check_checkout', '0') === '1') {
-                $courier = new \App\Services\BdCourierService();
-                $result = $courier->check($rawPhone);
-                if ($result && $courier->shouldBlock($result)) {
-                    return $this->errorResponse($request, $courier->blockMessage($result), 'customer_phone');
+            // Fraud Guard Check
+            $providerEnabled = (string) setting('fog_' . setting('fog_provider', 'bdcourier') . '_enabled', setting('fog_bdcourier_enabled', '0')) === '1';
+            $autoCheckEnabled = (string) setting('fog_auto_check_checkout', setting('fog_bdcourier_auto_check_checkout', '0')) === '1';
+
+            if ($providerEnabled && $autoCheckEnabled) {
+                $guard = \App\Services\FraudGuardFactory::make();
+                $result = $guard->check($rawPhone);
+                if ($result && $guard->shouldBlock($result)) {
+                    return $this->errorResponse($request, $guard->blockMessage($result), 'customer_phone');
+                }
+
+                if ($result && $guard->isFlagged($result)) {
+                    $isFraudFlagged = true;
+                    $fraudFlagReason = $guard->getFlagReason($result);
                 }
             }
         }
@@ -196,7 +204,7 @@ class LandingPageController extends Controller
         $total = $subtotal + $shippingFee;
 
         try {
-            $order = DB::transaction(function () use ($validated, $product, $orderItemName, $qty, $unitPrice, $lineTotal, $subtotal, $shippingFee, $total, $clientIp, $deviceHash, $request, $page) {
+            $order = DB::transaction(function () use ($validated, $product, $orderItemName, $qty, $unitPrice, $lineTotal, $subtotal, $shippingFee, $total, $clientIp, $deviceHash, $request, $page, &$isFraudFlagged, &$fraudFlagReason) {
                 $order = Order::create([
                     'order_number'          => $this->generateOrderNumber(),
                     'user_id'               => Auth::id(),
@@ -217,6 +225,8 @@ class LandingPageController extends Controller
                     'payment_status'        => 'pending',
                     'status'                => 'pending',
                     'order_notes'           => $validated['order_notes'] ?? "Landing Page: {$page->title}",
+                    'is_fraud_flagged'      => $isFraudFlagged ?? false,
+                    'fraud_flag_reason'     => $fraudFlagReason ?? null,
                 ]);
 
                 // Create Order Item

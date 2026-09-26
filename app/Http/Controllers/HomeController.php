@@ -25,6 +25,17 @@ class HomeController extends Controller
             ->orderBy('position')
             ->orderBy('id');
 
+        $trending = Product::query()->tap($withImages)->where('is_featured', true)->take(12)->get();
+        $bestSellers = Product::query()->tap($withImages)->where('is_best_seller', true)->take(12)->get();
+        $newArrivals = Product::query()->tap($withImages)->where('is_new_arrival', true)->take(12)->get();
+
+        if ($trending->isEmpty() || $bestSellers->isEmpty() || $newArrivals->isEmpty()) {
+            $latest = Product::query()->tap($withImages)->latest()->take(12)->get();
+            if ($trending->isEmpty()) $trending = $latest;
+            if ($bestSellers->isEmpty()) $bestSellers = $latest;
+            if ($newArrivals->isEmpty()) $newArrivals = $latest;
+        }
+
         return Inertia::render('Storefront/Home', [
             'heroBanners'     => $banners('hero')->get(),
             'middleBanners'   => $banners('middle')->get(),
@@ -38,9 +49,9 @@ class HomeController extends Controller
                 ->values()
                 ->take(4),
             'flashProducts'   => Product::query()->tap($withImages)->where('is_flash_sale', true)->orderBy('flash_sale_position')->orderBy('id')->get(),
-            'trending'        => Product::query()->tap($withImages)->where('is_featured', true)->take(12)->get(),
-            'bestSellers'     => Product::query()->tap($withImages)->where('is_best_seller', true)->take(12)->get(),
-            'newArrivals'     => Product::query()->tap($withImages)->where('is_new_arrival', true)->take(12)->get(),
+            'trending'        => $trending,
+            'bestSellers'     => $bestSellers,
+            'newArrivals'     => $newArrivals,
         ]);
     }
 }

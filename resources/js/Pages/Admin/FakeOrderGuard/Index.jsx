@@ -68,85 +68,66 @@ function GuardCard({ icon: Icon, iconBg, title, description, settingKey, enabled
   );
 }
 
-// ── BD Courier Result Widget ───────────────────────────────────────────────
-function BdCourierResult({ result }) {
+// ── Fraud Guard Result Widget ───────────────────────────────────────────────
+function FraudGuardResult({ result }) {
   if (!result) return null;
-  const risk    = riskStyle(result._risk_level);
-  const summary = result.data?.summary || {};
-  const couriers = Object.entries(result.data || {}).filter(([k]) => k !== 'summary');
-  const reports  = result.reports || [];
+  const level   = result.risk_level || 'unknown';
+  const label   = result.risk_label || 'Unknown';
+  const risk    = riskStyle(level);
+  const metrics = result.metrics || [];
+  const reports = result.reports || [];
 
   return (
     <div className="space-y-4 mt-4">
       {/* Risk badge + summary */}
-      <div className={`rounded-2xl p-4 flex items-center gap-4 ${risk.bg} border ${risk.ring} border-opacity-50`}>
-        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 bg-white shadow-sm`}>
-          {risk.icon}
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`font-bold text-lg ${risk.text}`}>{risk.label} Risk</span>
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full bg-white/60 ${risk.text}`}>
-              {result._success_ratio?.toFixed(1)}% success
-            </span>
+      <div className={`rounded-2xl p-4 flex items-center justify-between gap-4 ${risk.bg} border ${risk.ring} border-opacity-50`}>
+        <div className="flex items-center gap-4">
+          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 bg-white shadow-sm`}>
+            {risk.icon}
           </div>
-          <p className={`text-xs mt-0.5 ${risk.text} opacity-80`}>
-            {result.risk_verdict?.action || 'Review this customer'}
-          </p>
-          {result.risk_verdict?.reasons?.length > 0 && (
-            <ul className="mt-1 space-y-0.5">
-              {result.risk_verdict.reasons.map((r, i) => (
-                <li key={i} className={`text-xs ${risk.text} flex items-center gap-1`}>
-                  <span>•</span> {r}
-                </li>
-              ))}
-            </ul>
-          )}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`font-bold text-lg ${risk.text}`}>{label} Risk</span>
+            </div>
+            <p className={`text-xs mt-0.5 ${risk.text} opacity-80 uppercase tracking-widest font-semibold`}>
+              {result.provider === 'bdcourier' ? 'BD Courier' : 'Steadfast'}
+            </p>
+          </div>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-2xl font-black text-gray-900">{summary.total_parcel || 0}</p>
-          <p className="text-xs text-gray-500">Total Parcels</p>
+          <p className={`text-2xl font-black ${metrics[0] ? metrics[0].color : risk.text}`}>{metrics[0] ? metrics[0].value : 'N/A'}</p>
+          <p className="text-xs text-gray-500">{metrics[0] ? metrics[0].label : 'Score'}</p>
         </div>
       </div>
 
-      {/* Courier breakdown */}
-      {couriers.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500">Courier</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">Total</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">✅ Success</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500">❌ Cancelled</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500">Rate</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {couriers.filter(([, v]) => v.total_parcel > 0).map(([key, c]) => {
-                const r = riskStyle(c.success_ratio >= 80 ? 'safe' : c.success_ratio >= 60 ? 'medium' : 'high');
-                return (
-                  <tr key={key} className="hover:bg-gray-50/50">
-                    <td className="px-4 py-3 flex items-center gap-2">
-                      <img src={c.logo} alt={c.name} className="w-6 h-6 rounded object-contain" onError={e => e.target.style.display='none'} />
-                      <span className="font-medium text-gray-800 text-xs">{c.name}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center text-gray-600 text-xs">{c.total_parcel}</td>
-                    <td className="px-4 py-3 text-center text-green-600 text-xs font-medium">{c.success_parcel}</td>
-                    <td className="px-4 py-3 text-center text-red-500 text-xs">{c.cancelled_parcel}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r.bg} ${r.text}`}>
-                        {c.success_ratio?.toFixed(1)}%
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-              {couriers.every(([, v]) => v.total_parcel === 0) && (
-                <tr><td colSpan="5" className="px-4 py-6 text-center text-gray-400 text-xs">No delivery history found</td></tr>
-              )}
-            </tbody>
-          </table>
+      {/* Stats */}
+      {metrics.length > 1 && (
+        <div className="grid grid-cols-3 gap-3">
+          {metrics.slice(1).map((s, idx) => (
+            <div key={idx} className="bg-gray-50 rounded-xl p-3 text-center border border-gray-100">
+              <p className={`text-xl font-black ${s.color}`}>{s.value}</p>
+              <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Steadfast Reasons */}
+      {result.steadfast_reasons && result.steadfast_reasons.length > 0 && (
+        <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100 space-y-2.5">
+          {result.steadfast_reasons.map((r, i) => {
+            const isGreen = ['reports_none', 'history_long', 'history_some', 'ratio_high', 'ratio_good'].includes(r.key);
+            const isYellow = ['history_little', 'ratio_fair', 'reports_few'].includes(r.key);
+            const isRed = ['history_none', 'ratio_poor', 'reports_some', 'reports_many'].includes(r.key);
+            const dotColor = isGreen ? 'bg-green-500' : isYellow ? 'bg-yellow-500' : isRed ? 'bg-red-500' : 'bg-gray-400';
+            
+            return (
+              <div key={i} className="flex items-center gap-2.5 text-sm text-gray-700 font-medium">
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+                <span>{r.label}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -156,10 +137,10 @@ function BdCourierResult({ result }) {
           <p className="text-xs font-semibold text-red-700 flex items-center gap-1">
             <Icons.Warning className="w-4 h-4" /> {reports.length} Fraud Report{reports.length > 1 ? 's' : ''}
           </p>
-          {reports.map(r => (
-            <div key={r.id} className="text-xs text-red-600 bg-white/60 rounded-lg p-2">
-              <p className="font-medium">{r.name}</p>
-              <p className="opacity-80">{r.details}</p>
+          {reports.map((r, i) => (
+            <div key={i} className="text-xs text-red-600 bg-white/60 rounded-lg p-2">
+              <p className="font-medium">{r.details}</p>
+              <p className="opacity-80">Provider: {r.courierName}</p>
             </div>
           ))}
         </div>
@@ -224,7 +205,7 @@ function PhoneChecker() {
           <Icons.Warning className="w-4 h-4 flex-shrink-0" /> {error}
         </div>
       )}
-      {result && <BdCourierResult result={result} />}
+      {result && <FraudGuardResult result={result} />}
     </div>
   );
 }
@@ -260,6 +241,8 @@ export default function FakeOrderGuardIndex({ settings, stats, recentBlockedOrde
   const [phoneCooldown,          setPhoneCooldown]           = useState(getInt('fog_phone_cooldown_minutes'));
   const [maxOrdersPerPhone,      setMaxOrdersPerPhone]       = useState(getInt('fog_max_orders_per_phone'));
 
+  const [fogProvider,            setFogProvider]             = useState(getStr('fog_provider', 'bdcourier'));
+
   // BD Courier settings
   const [bdEnabled,         setBdEnabled]         = useState(getBool('fog_bdcourier_enabled', '0'));
   const [bdApiKey,          setBdApiKey]           = useState(getStr('fog_bdcourier_api_key'));
@@ -267,6 +250,14 @@ export default function FakeOrderGuardIndex({ settings, stats, recentBlockedOrde
   const [bdMinRate,         setBdMinRate]          = useState(getInt('fog_bdcourier_min_success_rate'));
   const [bdBlockLevels,     setBdBlockLevels]      = useState(
     (getStr('fog_bdcourier_block_risk_levels', 'danger,high')).split(',').map(s => s.trim()).filter(Boolean)
+  );
+
+  // Steadfast settings
+  const [steadfastEnabled,     setSteadfastEnabled]     = useState(getBool('fog_steadfast_enabled', '0'));
+  const [steadfastAutoCheck,   setSteadfastAutoCheck]   = useState(getBool('fog_steadfast_auto_check_checkout', '0'));
+  const [steadfastMinScore,    setSteadfastMinScore]    = useState(getInt('fog_steadfast_min_score', 0));
+  const [steadfastBlockLevels, setSteadfastBlockLevels] = useState(
+    (getStr('fog_steadfast_block_risk_levels', 'danger,high')).split(',').map(s => s.trim()).filter(Boolean)
   );
 
   const [saving, setSaving] = useState(false);
@@ -285,11 +276,16 @@ export default function FakeOrderGuardIndex({ settings, stats, recentBlockedOrde
       fog_ip_cooldown_minutes:        ipCooldown,
       fog_phone_cooldown_minutes:     phoneCooldown,
       fog_max_orders_per_phone:       maxOrdersPerPhone,
+      fog_provider:                   fogProvider,
       fog_bdcourier_enabled:          bdEnabled    ? '1' : '0',
       fog_bdcourier_api_key:          bdApiKey,
       fog_bdcourier_auto_check_checkout: bdAutoCheck ? '1' : '0',
       fog_bdcourier_min_success_rate: bdMinRate,
       fog_bdcourier_block_risk_levels: bdBlockLevels.join(','),
+      fog_steadfast_enabled:          steadfastEnabled ? '1' : '0',
+      fog_steadfast_auto_check_checkout: steadfastAutoCheck ? '1' : '0',
+      fog_steadfast_min_score:        steadfastMinScore,
+      fog_steadfast_block_risk_levels: steadfastBlockLevels.join(','),
     }, {
       preserveScroll: true,
       onSuccess: () => { setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500); },
@@ -303,9 +299,13 @@ export default function FakeOrderGuardIndex({ settings, stats, recentBlockedOrde
        fog_auto_block_ip_on_cancel: setAutoBlockOnCancel })[key]?.(val);
   };
 
-  const toggleLevel = (level) => setBdBlockLevels(prev =>
-    prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]
-  );
+  const toggleLevel = (level) => {
+    if (fogProvider === 'bdcourier') {
+      setBdBlockLevels(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]);
+    } else {
+      setSteadfastBlockLevels(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]);
+    }
+  };
 
   const activeGuards = [ipBlockEnabled, deviceBlockEnabled, phoneBlockEnabled, fakeNumberEnabled, bdEnabled].filter(Boolean).length;
 
@@ -424,83 +424,177 @@ export default function FakeOrderGuardIndex({ settings, stats, recentBlockedOrde
           ))}
         </div>
 
-        {/* ── BD Courier Fraud Check ─────────────────────────────────────── */}
+        {/* ── API Provider Integrations ─────────────────────────────────────── */}
         <div className="space-y-3">
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest px-1">BD Courier Integration</h2>
+          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-widest px-1">API Integrations (Delivery & Fraud History)</h2>
 
-          {/* Master toggle card */}
-          <div className={`bg-white rounded-2xl border shadow-sm transition-all ${bdEnabled && masterEnabled ? 'border-indigo-200 shadow-indigo-50 shadow-md' : 'border-gray-100'}`}>
-            <div className="flex items-start justify-between p-5">
-              <div className="flex items-start gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bdEnabled && masterEnabled ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-400'}`}>
-                  <Icons.Truck className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 text-sm">BD Courier Fraud Check</h3>
-                    {bdEnabled && masterEnabled && <span className="text-xs bg-indigo-100 text-indigo-700 font-medium px-2 py-0.5 rounded-full">Live API</span>}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5">Check customer's full delivery history across Pathao, Steadfast, Redx, Paperfly and more via BD Courier API.</p>
-                </div>
-              </div>
-              <Toggle enabled={bdEnabled} onChange={setBdEnabled} disabled={!masterEnabled} />
+          {/* Provider Selection */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col sm:flex-row items-center gap-4">
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900 text-sm">Active Provider</h3>
+              <p className="text-xs text-gray-500 mt-0.5">Select which third-party provider to use for fraud lookups.</p>
             </div>
-
-            {bdEnabled && masterEnabled && (
-              <div className="px-5 pb-5 border-t border-gray-50 pt-4 space-y-4">
-                {/* API Key */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5 flex items-center gap-1"><Icons.Key className="w-3.5 h-3.5" /> BD Courier API Key</label>
-                  <input type="password" value={bdApiKey} onChange={e => setBdApiKey(e.target.value)}
-                    className="w-full h-10 px-4 rounded-xl border border-gray-200 text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
-                    placeholder="bdc_..." />
-                  <p className="text-xs text-gray-400 mt-1">Get your key from <a href="https://api.bdcourier.com" target="_blank" rel="noreferrer" className="text-indigo-500 hover:underline">api.bdcourier.com</a></p>
-                </div>
-
-                {/* Auto check toggle */}
-                <div className="flex items-center justify-between bg-indigo-50 rounded-xl p-3">
-                  <div>
-                    <p className="text-xs font-medium text-indigo-800">Auto-check at checkout</p>
-                    <p className="text-xs text-indigo-600 mt-0.5">Automatically call BD Courier API when customer places an order.</p>
-                  </div>
-                  <Toggle enabled={bdAutoCheck} onChange={setBdAutoCheck} />
-                </div>
-
-                {/* Min success rate */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-1.5">Block if success rate below (%)</label>
-                  <div className="flex items-center gap-3">
-                    <input type="number" min={0} max={100} value={bdMinRate}
-                      onChange={e => setBdMinRate(Number(e.target.value))}
-                      className="w-24 h-9 px-3 rounded-lg border border-gray-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-center" />
-                    <span className="text-xs text-gray-500">%
-                      {bdMinRate > 0 ? <span className="text-red-600 font-medium ml-1">Block if below {bdMinRate}%</span>
-                                     : <span className="text-gray-400 ml-1">Disabled (0 = off)</span>}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Risk level blocklist */}
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 mb-2">Block these risk levels</label>
-                  <div className="flex flex-wrap gap-2">
-                    {RISK_LEVELS.map(rl => {
-                      const active = bdBlockLevels.includes(rl.key);
-                      const rs = riskStyle(rl.key);
-                      return (
-                        <button key={rl.key} type="button" onClick={() => toggleLevel(rl.key)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${active ? `${rs.bg} ${rs.text} border-current shadow-sm` : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}>
-                          <span>{rl.icon}</span> {rl.label}
-                          {active && <Icons.Check className="w-3 h-3" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">Selected levels will be blocked at checkout when auto-check is enabled.</p>
-                </div>
-              </div>
-            )}
+            <select
+              value={fogProvider}
+              onChange={e => setFogProvider(e.target.value)}
+              className="w-full sm:w-auto h-10 px-4 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none"
+            >
+              <option value="bdcourier">BD Courier</option>
+              <option value="steadfast">Steadfast Native API</option>
+            </select>
           </div>
+
+          {/* Settings depending on the selected provider */}
+          {fogProvider === 'bdcourier' && (
+            <div className={`bg-white rounded-2xl border shadow-sm transition-all ${bdEnabled && masterEnabled ? 'border-indigo-200 shadow-indigo-50 shadow-md' : 'border-gray-100'}`}>
+              <div className="flex items-start justify-between p-5">
+                <div className="flex items-start gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bdEnabled && masterEnabled ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-50 text-gray-400'}`}>
+                    <Icons.Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900 text-sm">BD Courier Fraud Check</h3>
+                      {bdEnabled && masterEnabled && <span className="text-xs bg-indigo-100 text-indigo-700 font-medium px-2 py-0.5 rounded-full">Live API</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">Check customer's full delivery history across Pathao, Steadfast, Redx, Paperfly and more via BD Courier API.</p>
+                  </div>
+                </div>
+                <Toggle enabled={bdEnabled} onChange={setBdEnabled} disabled={!masterEnabled} />
+              </div>
+
+              {bdEnabled && masterEnabled && (
+                <div className="px-5 pb-5 border-t border-gray-50 pt-4 space-y-4">
+                  {/* API Key */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5 flex items-center gap-1"><Icons.Key className="w-3.5 h-3.5" /> BD Courier API Key</label>
+                    <input type="password" value={bdApiKey} onChange={e => setBdApiKey(e.target.value)}
+                      className="w-full h-10 px-4 rounded-xl border border-gray-200 text-sm font-mono focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none"
+                      placeholder="bdc_..." />
+                    <p className="text-xs text-gray-400 mt-1">Get your key from <a href="https://api.bdcourier.com" target="_blank" rel="noreferrer" className="text-indigo-500 hover:underline">api.bdcourier.com</a></p>
+                  </div>
+
+                  {/* Auto check toggle */}
+                  <div className="flex items-center justify-between bg-indigo-50 rounded-xl p-3">
+                    <div>
+                      <p className="text-xs font-medium text-indigo-800">Auto-check at checkout</p>
+                      <p className="text-xs text-indigo-600 mt-0.5">Automatically call BD Courier API when customer places an order.</p>
+                    </div>
+                    <Toggle enabled={bdAutoCheck} onChange={setBdAutoCheck} />
+                  </div>
+
+                  {/* Min success rate */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Block if success rate below (%)</label>
+                    <div className="flex items-center gap-3">
+                      <input type="number" min={0} max={100} value={bdMinRate}
+                        onChange={e => setBdMinRate(Number(e.target.value))}
+                        className="w-24 h-9 px-3 rounded-lg border border-gray-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none text-center" />
+                      <span className="text-xs text-gray-500">%
+                        {bdMinRate > 0 ? <span className="text-red-600 font-medium ml-1">Block if below {bdMinRate}%</span>
+                                      : <span className="text-gray-400 ml-1">Disabled (0 = off)</span>}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Risk level blocklist */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-2">Block these risk levels</label>
+                    <div className="flex flex-wrap gap-2">
+                      {RISK_LEVELS.map(rl => {
+                        const active = bdBlockLevels.includes(rl.key);
+                        const rs = riskStyle(rl.key);
+                        return (
+                          <button key={rl.key} type="button" onClick={() => toggleLevel(rl.key)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${active ? `${rs.bg} ${rs.text} border-current shadow-sm` : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+                            <span>{rl.icon}</span> {rl.label}
+                            {active && <Icons.Check className="w-3 h-3" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">Selected levels will be blocked at checkout when auto-check is enabled.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {fogProvider === 'steadfast' && (
+            <div className={`bg-white rounded-2xl border shadow-sm transition-all ${steadfastEnabled && masterEnabled ? 'border-teal-200 shadow-teal-50 shadow-md' : 'border-gray-100'}`}>
+              <div className="flex items-start justify-between p-5">
+                <div className="flex items-start gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${steadfastEnabled && masterEnabled ? 'bg-teal-50 text-teal-600' : 'bg-gray-50 text-gray-400'}`}>
+                    <Icons.Truck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900 text-sm">Steadfast Native Fraud API</h3>
+                      {steadfastEnabled && masterEnabled && <span className="text-xs bg-teal-100 text-teal-700 font-medium px-2 py-0.5 rounded-full">Live API</span>}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">Use Steadfast's official fraud checking API.</p>
+                  </div>
+                </div>
+                <Toggle enabled={steadfastEnabled} onChange={setSteadfastEnabled} disabled={!masterEnabled} />
+              </div>
+
+              {steadfastEnabled && masterEnabled && (
+                <div className="px-5 pb-5 border-t border-gray-50 pt-4 space-y-4">
+                  <div className="bg-teal-50/50 rounded-xl p-4 border border-teal-100 flex items-start gap-3">
+                    <Icons.Key className="w-4 h-4 text-teal-600 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-teal-900">API Credentials</p>
+                      <p className="text-[11px] text-teal-700 mt-0.5">
+                        Steadfast API credentials are automatically loaded from your <a href="/admin/settings" className="font-bold underline hover:text-teal-900">Courier APIs</a> settings.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Auto check toggle */}
+                  <div className="flex items-center justify-between bg-teal-50 rounded-xl p-3">
+                    <div>
+                      <p className="text-xs font-medium text-teal-800">Auto-check at checkout</p>
+                      <p className="text-xs text-teal-600 mt-0.5">Automatically call Steadfast API when customer places an order.</p>
+                    </div>
+                    <Toggle enabled={steadfastAutoCheck} onChange={setSteadfastAutoCheck} />
+                  </div>
+
+                  {/* Min score threshold */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-1.5">Block if score below (%)</label>
+                    <div className="flex items-center gap-3">
+                      <input type="number" min={0} max={100} value={steadfastMinScore}
+                        onChange={e => setSteadfastMinScore(Number(e.target.value))}
+                        className="w-24 h-9 px-3 rounded-lg border border-gray-200 text-sm font-medium focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 outline-none text-center" />
+                      <span className="text-xs text-gray-500">%
+                        {steadfastMinScore > 0 ? <span className="text-red-600 font-medium ml-1">Block if below {steadfastMinScore}%</span>
+                                      : <span className="text-gray-400 ml-1">Disabled (0 = off)</span>}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Risk level blocklist */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-600 mb-2">Block these risk levels</label>
+                    <div className="flex flex-wrap gap-2">
+                      {RISK_LEVELS.map(rl => {
+                        const active = steadfastBlockLevels.includes(rl.key);
+                        const rs = riskStyle(rl.key);
+                        return (
+                          <button key={rl.key} type="button" onClick={() => toggleLevel(rl.key)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${active ? `${rs.bg} ${rs.text} border-current shadow-sm` : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}>
+                            <span>{rl.icon}</span> {rl.label}
+                            {active && <Icons.Check className="w-3 h-3" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">Selected levels will be blocked at checkout when auto-check is enabled.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Live Manual Phone Checker */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -508,7 +602,7 @@ export default function FakeOrderGuardIndex({ settings, stats, recentBlockedOrde
               <span className="w-7 h-7 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center"><Icons.Search className="w-4 h-4" /></span>
               Manual Phone Checker
             </h3>
-            <p className="text-xs text-gray-500 mb-4">Check any BD phone number against BD Courier's fraud database instantly.</p>
+            <p className="text-xs text-gray-500 mb-4">Check any BD phone number against the selected fraud provider database instantly.</p>
             <PhoneChecker />
           </div>
         </div>

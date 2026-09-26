@@ -45,6 +45,8 @@ class Order extends Model
         'ip_address',
         'user_agent',
         'device_hash',
+        'is_fraud_flagged',
+        'fraud_flag_reason',
     ];
 
     /**

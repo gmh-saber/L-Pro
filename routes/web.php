@@ -191,6 +191,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('products/{product:id}', [AdminProductController::class, 'update'])->name('products.update');
         Route::patch('products/{product:id}', [AdminProductController::class, 'update']);
         Route::delete('products/{product:id}', [AdminProductController::class, 'destroy'])->name('products.destroy');
+        Route::post('categories/{category:id}/toggle', [AdminCategoryController::class, 'toggle'])->name('categories.toggle');
         Route::post('categories/bulk', [AdminCategoryController::class, 'bulk'])->name('categories.bulk');
         Route::get('categories', [AdminCategoryController::class, 'index'])->name('categories.index');
         Route::get('categories/create', [AdminCategoryController::class, 'create'])->name('categories.create');

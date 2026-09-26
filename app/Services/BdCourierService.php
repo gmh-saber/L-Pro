@@ -5,7 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
-class BdCourierService
+class BdCourierService implements \App\Contracts\FraudGuardInterface
 {
     private const BASE_URL = 'https://api.bdcourier.com';
     private const TIMEOUT  = 12; // seconds — fail-open on timeout
@@ -128,5 +128,71 @@ class BdCourierService
             'high'   => "আপনার ফোন নম্বরে উচ্চ ঝুঁকি চিহ্নিত হয়েছে ({$ratio}% সফলতার হার)। অর্ডার নিশ্চিত করা যাচ্ছে না।",
             default  => "আপনার ফোন নম্বরটি যাচাই করা সম্ভব হয়নি। অনুগ্রহ করে আবার চেষ্টা করুন।",
         };
+    }
+
+    /**
+     * BD Courier doesn't have a specific flagging mechanism in the old design,
+     * so it returns false.
+     */
+    public function isFlagged(?array $result): bool
+    {
+        return false;
+    }
+
+    /**
+     * BD Courier doesn't have a specific flagging reason in the old design.
+     */
+    public function getFlagReason(?array $result): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Normalize the provider-specific API response into a standard format.
+     */
+    public function normalizeForFrontend(?array $result): ?array
+    {
+        if (!$result) return null;
+
+        $reports = [];
+        if (!empty($result['reports']) && is_array($result['reports'])) {
+            foreach ($result['reports'] as $report) {
+                $reports[] = [
+                    'details' => $report['details'] ?? 'Reported',
+                    'courierName' => $report['courierName'] ?? 'Unknown'
+                ];
+            }
+        }
+
+        $successRatio = $result['_success_ratio'] ?? 0;
+
+        return [
+            'provider' => 'bdcourier',
+            'risk_level' => $result['_risk_level'] ?? 'unknown',
+            'risk_label' => $result['_risk_label'] ?? 'Unknown',
+            'metrics' => [
+                [
+                    'label' => 'Success Ratio',
+                    'value' => number_format($successRatio, 0) . '%',
+                    'color' => $successRatio < 50 ? 'text-red-500' : 'text-green-600',
+                ],
+                [
+                    'label' => 'Total Parcel',
+                    'value' => $result['data']['summary']['total_parcel'] ?? 0,
+                    'color' => 'text-gray-900',
+                ],
+                [
+                    'label' => 'Success Parcel',
+                    'value' => ($result['data']['summary']['success_parcel'] ?? 0) . ' ✓',
+                    'color' => 'text-green-600',
+                ],
+                [
+                    'label' => 'Cancelled Parcel',
+                    'value' => ($result['data']['summary']['cancelled_parcel'] ?? 0) . ' ✕',
+                    'color' => 'text-red-500',
+                ]
+            ],
+            'reports' => $reports
+        ];
     }
 }

@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
-use App\Services\BdCourierService;
+use App\Services\FraudGuardFactory;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -110,6 +110,8 @@ class OrderController extends Controller
             'courier_tracking_code' => $o->courier_tracking_code,
             'ip_address'  => $o->ip_address,
             'device_hash' => $o->device_hash,
+            'is_fraud_flagged' => (bool) $o->is_fraud_flagged,
+            'fraud_flag_reason' => $o->fraud_flag_reason,
         ]);
 
 
@@ -150,7 +152,7 @@ class OrderController extends Controller
             'toDate'             => $toDate,
             'q'                  => $term,
             'courierStats'       => $courierStats,
-            'bdcourierConfigured'=> (bool) !empty(setting('fog_bdcourier_api_key', '')),
+            'fraudGuardConfigured'=> !empty(setting('fog_provider', 'bdcourier') === 'steadfast' ? setting('steadfast_api_key') : setting('fog_bdcourier_api_key')),
         ]);
     }
 
@@ -331,11 +333,15 @@ class OrderController extends Controller
             'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'subtotal' => $item->subtotal,
         ]);
 
-        // BD Courier fraud check for this customer's phone
-        $bdcourier = null;
-        if ((string) setting('fog_bdcourier_enabled', '0') === '1' && $order->customer_phone) {
-            $service   = new BdCourierService();
-            $bdcourier = $service->check($order->customer_phone);
+        // Fraud check for this customer's phone
+        $fraudData = null;
+        $providerEnabled = (string) setting('fog_' . setting('fog_provider', 'bdcourier') . '_enabled', setting('fog_bdcourier_enabled', '0')) === '1';
+        if ($providerEnabled && $order->customer_phone) {
+            $guard = FraudGuardFactory::make();
+            $result = $guard->check($order->customer_phone);
+            if ($result) {
+                $fraudData = $guard->normalizeForFrontend($result);
+            }
         }
 
         return Inertia::render('Admin/Orders/Show', [
@@ -347,8 +353,10 @@ class OrderController extends Controller
                 'courier_tracking_code'   => $order->courier_tracking_code,
                 'courier_consignment_id'  => $order->courier_consignment_id,
                 'courier_status'          => $order->courier_status,
+                'is_fraud_flagged'        => (bool) $order->is_fraud_flagged,
+                'fraud_flag_reason'       => $order->fraud_flag_reason,
             ]),
-            'bdcourier' => $bdcourier,
+            'fraudData' => $fraudData,
         ]);
     }
 
@@ -494,7 +502,7 @@ class OrderController extends Controller
     }
 
     /**
-     * On-demand BD Courier fraud check for a phone number.
+     * On-demand Fraud check for a phone number.
      * Called via fetch() from the Fraud & History tab.
      */
     public function checkFraud(Request $request): JsonResponse
@@ -503,19 +511,18 @@ class OrderController extends Controller
             'phone' => ['required', 'string', 'max:20'],
         ]);
 
-        $apiKey = (string) setting('fog_bdcourier_api_key', '');
-        if (empty($apiKey)) {
-            return response()->json(['error' => 'BD Courier API key is not configured in settings.'], 422);
-        }
-
-        $service = new BdCourierService($apiKey);
-        $result  = $service->check($request->input('phone'));
+        $guard = FraudGuardFactory::make();
+        $result = $guard->check($request->input('phone'));
 
         if (! $result) {
-            return response()->json(['error' => 'Could not reach BD Courier API. Check your API key or try again.'], 422);
+            return response()->json(['error' => 'Could not reach Fraud API. Check your configuration or try again.'], 422);
         }
 
-        return response()->json($result);
+        if (isset($result['error'])) {
+            return response()->json(['error' => $result['error']], 429);
+        }
+
+        return response()->json($guard->normalizeForFrontend($result));
     }
 
     /**

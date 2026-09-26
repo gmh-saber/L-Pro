@@ -1,14 +1,27 @@
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Head, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function CategoriesIndex({ categories }) {
+export default function CategoriesIndex({ categories, filters, parents }) {
   const [selected, setSelected] = useState([]);
   const [bulkAction, setBulkAction] = useState('');
   const [deleteModal, setDeleteModal] = useState(null);
+  
+  const [search, setSearch] = useState(filters?.search || '');
+  const [parentId, setParentId] = useState(filters?.parent_id || '');
+
+  useEffect(() => {
+    // Only trigger if values are different from current URL filters to avoid infinite loops on load
+    if (search === (filters?.search || '') && parentId === (filters?.parent_id || '')) return;
+
+    const delay = setTimeout(() => {
+      router.get('/admin/categories', { search, parent_id: parentId }, { preserveState: true, replace: true });
+    }, 300);
+    return () => clearTimeout(delay);
+  }, [search, parentId]);
 
   const toggleSelect = (id) => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  const toggleAll = (e) => setSelected(e.target.checked ? (categories || []).map(c => c.id) : []);
+  const toggleAll = (e) => setSelected(e.target.checked ? (categories?.data || categories || []).map(c => c.id) : []);
 
   const handleBulk = () => {
     if (!bulkAction || selected.length === 0) return;
@@ -21,6 +34,13 @@ export default function CategoriesIndex({ categories }) {
 
   const confirmDelete = (category) => {
     setDeleteModal({ type: 'single', category });
+  };
+
+  const toggleStatus = (category) => {
+    router.post(`/admin/categories/${category.id}/toggle`, {}, {
+      preserveScroll: true,
+      preserveState: true,
+    });
   };
 
   const executeDelete = () => {
@@ -43,8 +63,26 @@ export default function CategoriesIndex({ categories }) {
       <Head title="Categories" />
       <AdminLayout title="Categories">
         <div className="space-y-5">
-          <div className="flex items-center justify-between">
-            <div />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input 
+                type="search" 
+                placeholder="Search categories..." 
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 w-full sm:w-64"
+              />
+              <select 
+                value={parentId}
+                onChange={e => setParentId(e.target.value)}
+                className="border border-gray-200 rounded-xl px-4 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 w-full sm:w-48"
+              >
+                <option value="">All Parents</option>
+                {(parents || []).map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
             <a href="/admin/categories/create" className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
               Add Category
@@ -71,7 +109,7 @@ export default function CategoriesIndex({ categories }) {
                 <thead>
                   <tr className="bg-gray-50/50">
                     <th className="px-5 py-3 w-10">
-                      <input type="checkbox" onChange={toggleAll} checked={selected.length === (categories || []).length && (categories || []).length > 0} className="h-4 w-4 accent-orange-500" />
+                      <input type="checkbox" onChange={toggleAll} checked={selected.length === (categories?.data || categories || []).length && (categories?.data || categories || []).length > 0} className="h-4 w-4 accent-orange-500" />
                     </th>
                     {['Category', 'Parent', 'Slug', 'Products', 'Position', 'Status', 'Actions'].map(h => (
                       <th key={h} className={`px-5 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide text-left ${h === 'Actions' ? 'text-right' : ''}`}>{h}</th>
@@ -79,9 +117,9 @@ export default function CategoriesIndex({ categories }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {(categories || []).length === 0 ? (
+                  {(categories?.data || categories || []).length === 0 ? (
                     <tr><td colSpan="7" className="px-5 py-12 text-center text-gray-400">No categories found.</td></tr>
-                  ) : (categories || []).map(category => (
+                  ) : (categories?.data || categories || []).map(category => (
                     <tr key={category.id} className={`hover:bg-gray-50/50 transition-colors ${selected.includes(category.id) ? 'bg-orange-50/30' : ''}`}>
                       <td className="px-5 py-3.5">
                         <input type="checkbox" checked={selected.includes(category.id)} onChange={() => toggleSelect(category.id)} className="h-4 w-4 accent-orange-500" />
@@ -106,9 +144,14 @@ export default function CategoriesIndex({ categories }) {
                       <td className="px-5 py-3.5 text-gray-600">{category.products_count ?? 0}</td>
                       <td className="px-5 py-3.5 text-gray-500">{category.position ?? 0}</td>
                       <td className="px-5 py-3.5">
-                        <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${category.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {category.is_active ? 'Active' : 'Hidden'}
-                        </span>
+                        <button 
+                          type="button"
+                          onClick={() => toggleStatus(category)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500/20 ${category.is_active ? 'bg-green-500' : 'bg-gray-200'}`}
+                        >
+                          <span className="sr-only">Toggle status</span>
+                          <span aria-hidden="true" className={`pointer-events-none absolute left-0 inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform duration-200 ease-in-out ${category.is_active ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                        </button>
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
@@ -120,6 +163,26 @@ export default function CategoriesIndex({ categories }) {
                   ))}
                 </tbody>
               </table>
+              
+              {/* Basic Pagination Controls */}
+              {categories?.links && (
+                <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-white">
+                  <span className="text-sm text-gray-500">
+                    Showing {categories.from || 0} to {categories.to || 0} of {categories.total || 0} categories
+                  </span>
+                  <div className="flex gap-1">
+                    {categories.links.map((link, idx) => (
+                      <a
+                        key={idx}
+                        href={link.url || '#'}
+                        className={`px-3 py-1 text-sm border rounded-lg ${link.active ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'} ${!link.url ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        dangerouslySetInnerHTML={{ __html: link.label }}
+                        onClick={(e) => !link.url && e.preventDefault()}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

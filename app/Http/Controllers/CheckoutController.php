@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use App\Support\BdPhoneValidator;
-use App\Services\BdCourierService;
+use App\Services\FraudGuardFactory;
 
 class CheckoutController extends Controller
 {
@@ -214,18 +214,26 @@ class CheckoutController extends Controller
                 }
             }
 
-            // 8. BD Courier Fraud Check (auto check at checkout)
-            if ((string) setting('fog_bdcourier_enabled', '0') === '1' &&
-                (string) setting('fog_bdcourier_auto_check_checkout', '0') === '1') {
+            // 8. Fraud Guard Check (auto check at checkout)
+            // Fallback to old setting keys if new ones don't exist
+            $providerEnabled = (string) setting('fog_' . setting('fog_provider', 'bdcourier') . '_enabled', setting('fog_bdcourier_enabled', '0')) === '1';
+            $autoCheckEnabled = (string) setting('fog_auto_check_checkout', setting('fog_bdcourier_auto_check_checkout', '0')) === '1';
+
+            if ($providerEnabled && $autoCheckEnabled) {
                 $phone = $validated['customer_phone'] ?? '';
                 if ($phone) {
-                    $courier  = new BdCourierService();
-                    $result   = $courier->check($phone);
+                    $guard = FraudGuardFactory::make();
+                    $result = $guard->check($phone);
                     // Fail-open: if API is unreachable, allow order
-                    if ($result && $courier->shouldBlock($result)) {
+                    if ($result && $guard->shouldBlock($result)) {
                         return back()->withInput()->withErrors([
-                            'customer_phone' => $courier->blockMessage($result),
+                            'customer_phone' => $guard->blockMessage($result),
                         ]);
+                    }
+
+                    if ($result && $guard->isFlagged($result)) {
+                        $isFraudFlagged = true;
+                        $fraudFlagReason = $guard->getFlagReason($result);
                     }
                 }
             }
@@ -256,7 +264,7 @@ class CheckoutController extends Controller
         $isCod = $validated['payment_method'] === 'cod';
 
         try {
-            $order = DB::transaction(function () use ($validated, $items, $subtotal, $discount, $shipping, $tax, $total, $isCod, $coupon, $clientIp, $deviceHash, $request) {
+            $order = DB::transaction(function () use ($validated, $items, $subtotal, $discount, $shipping, $tax, $total, $isCod, $coupon, $clientIp, $deviceHash, $request, &$isFraudFlagged, &$fraudFlagReason) {
                 $order = Order::create([
                     'order_number'    => $this->generateOrderNumber(),
                     'user_id'         => Auth::id(),
@@ -282,6 +290,8 @@ class CheckoutController extends Controller
                     'payment_txn_id'  => $isCod ? null : ($validated['payment_txn_id'] ?? null),
                     'payment_status'  => 'pending',
                     'status'          => 'pending',
+                    'is_fraud_flagged' => $isFraudFlagged ?? false,
+                    'fraud_flag_reason' => $fraudFlagReason ?? null,
                 ]);
 
                 foreach ($items as $item) {

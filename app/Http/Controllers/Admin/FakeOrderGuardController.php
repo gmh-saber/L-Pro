@@ -8,7 +8,6 @@ use App\Models\BlockedIp;
 use App\Models\BlockedPhone;
 use App\Models\Order;
 use App\Models\Setting;
-use App\Services\BdCourierService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -37,7 +36,7 @@ class FakeOrderGuardController extends Controller
     }
 
     /**
-     * Manual BD Courier phone check — called from the admin UI.
+     * Manual Fraud check — called from the admin UI.
      */
     public function checkPhone(Request $request)
     {
@@ -45,18 +44,13 @@ class FakeOrderGuardController extends Controller
             'phone' => ['required', 'string', 'max:20'],
         ]);
 
-        $apiKey = (string) setting('fog_bdcourier_api_key', '');
-        if (empty($apiKey)) {
-            return response()->json(['error' => 'BD Courier API key is not configured.'], 422);
-        }
-
-        $service = new BdCourierService($apiKey);
-        $result  = $service->check($request->input('phone'));
+        $guard = \App\Services\FraudGuardFactory::make();
+        $result = $guard->check($request->input('phone'));
 
         if (! $result) {
-            return response()->json(['error' => 'Could not reach BD Courier API. Check your API key or try again.'], 422);
+            return response()->json(['error' => 'Could not reach Fraud API. Check your configuration or try again.'], 422);
         }
 
-        return response()->json($result);
+        return response()->json($guard->normalizeForFrontend($result));
     }
 }

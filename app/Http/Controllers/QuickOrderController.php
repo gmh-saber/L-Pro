@@ -10,7 +10,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Services\CouponService;
 use App\Support\BdPhoneValidator;
-use App\Services\BdCourierService;
+use App\Services\FraudGuardFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -134,17 +134,24 @@ class QuickOrderController extends Controller
                 }
             }
 
-            // 8. BD Courier check
-            if ((string) setting('fog_bdcourier_enabled', '0') === '1' &&
-                (string) setting('fog_bdcourier_auto_check_checkout', '0') === '1') {
+            // 8. Fraud Guard Check
+            $providerEnabled = (string) setting('fog_' . setting('fog_provider', 'bdcourier') . '_enabled', setting('fog_bdcourier_enabled', '0')) === '1';
+            $autoCheckEnabled = (string) setting('fog_auto_check_checkout', setting('fog_bdcourier_auto_check_checkout', '0')) === '1';
+
+            if ($providerEnabled && $autoCheckEnabled) {
                 $phone = $validated['customer_phone'] ?? '';
                 if ($phone) {
-                    $courier = new BdCourierService();
-                    $result  = $courier->check($phone);
-                    if ($result && $courier->shouldBlock($result)) {
+                    $guard = FraudGuardFactory::make();
+                    $result = $guard->check($phone);
+                    if ($result && $guard->shouldBlock($result)) {
                         return response()->json(['errors' => [
-                            'customer_phone' => $courier->blockMessage($result),
+                            'customer_phone' => $guard->blockMessage($result),
                         ]], 422);
+                    }
+
+                    if ($result && $guard->isFlagged($result)) {
+                        $isFraudFlagged = true;
+                        $fraudFlagReason = $guard->getFlagReason($result);
                     }
                 }
             }
@@ -198,7 +205,7 @@ class QuickOrderController extends Controller
         try {
             $order = DB::transaction(function () use (
                 $validated, $product, $price, $qty, $subtotal, $discount,
-                $shipping, $tax, $total, $coupon, $clientIp, $deviceHash, $request, $shippingZone
+                $shipping, $tax, $total, $coupon, $clientIp, $deviceHash, $request, $shippingZone, &$isFraudFlagged, &$fraudFlagReason
             ) {
                 $product->refresh()->lockForUpdate();
                 if ($product->stock_quantity < $qty) {
@@ -228,6 +235,8 @@ class QuickOrderController extends Controller
                     'payment_status'   => 'pending',
                     'status'           => 'pending',
                     'internal_note'    => $validated['variant'] ? 'Variant: ' . $validated['variant'] : null,
+                    'is_fraud_flagged' => $isFraudFlagged ?? false,
+                    'fraud_flag_reason' => $fraudFlagReason ?? null,
                 ]);
 
                 OrderItem::create([
